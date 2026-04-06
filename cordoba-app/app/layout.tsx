@@ -2,6 +2,10 @@ import type { Metadata } from 'next'
 import './globals.css'
 import Sidebar from '@/components/Sidebar'
 import Topbar from '@/components/Topbar'
+import { initDB } from '@/lib/schema'
+
+// Inicializar la base de datos al arrancar el servidor
+initDB()
 
 export const metadata: Metadata = {
   title: 'Córdoba — Gestión de obras',
