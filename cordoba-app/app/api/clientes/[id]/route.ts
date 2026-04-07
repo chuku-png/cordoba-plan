@@ -54,7 +54,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(cliente)
 }
 
-// DELETE /api/clientes/[id] — soft delete (mueve a papelera)
+// DELETE /api/clientes/[id] — soft delete en cascada (cliente → obras → ingresos/adicionales/presupuestos)
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const id = Number(params.id)
 
@@ -63,9 +63,20 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 })
   }
 
-  db.prepare(`
-    UPDATE clientes SET deleted_at = datetime('now','localtime') WHERE id = ?
-  `).run(id)
+  const now = "datetime('now','localtime')"
+
+  db.transaction(() => {
+    // Obtener obras del cliente
+    const obras = db.prepare('SELECT id FROM obras WHERE cliente_id = ? AND deleted_at IS NULL').all(id) as {id:number}[]
+    for (const obra of obras) {
+      db.prepare(`UPDATE ingresos      SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(obra.id)
+      db.prepare(`UPDATE adicionales   SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(obra.id)
+      db.prepare(`UPDATE presupuestos  SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(obra.id)
+      db.prepare(`UPDATE compras_proveedor SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(obra.id)
+    }
+    db.prepare(`UPDATE obras    SET deleted_at = ${now} WHERE cliente_id = ? AND deleted_at IS NULL`).run(id)
+    db.prepare(`UPDATE clientes SET deleted_at = ${now} WHERE id = ?`).run(id)
+  })()
 
   return NextResponse.json({ ok: true })
 }

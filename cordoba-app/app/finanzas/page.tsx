@@ -391,17 +391,28 @@ export default function FinanzasPage() {
               </div>
             </div>
             <div>
-              <label className="label">Obra</label>
-              <select value={formIngreso.obra_id} onChange={(e) => setFormIngreso({ ...formIngreso, obra_id: e.target.value })} className="input">
-                <option value="">— Sin obra —</option>
-                {obras.map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+              <label className="label">Cliente</label>
+              <select
+                value={formIngreso.cliente_id}
+                onChange={(e) => setFormIngreso({ ...formIngreso, cliente_id: e.target.value, obra_id: '' })}
+                className="input"
+              >
+                <option value="">— Sin cliente —</option>
+                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
               </select>
             </div>
             <div>
-              <label className="label">Cliente</label>
-              <select value={formIngreso.cliente_id} onChange={(e) => setFormIngreso({ ...formIngreso, cliente_id: e.target.value })} className="input">
-                <option value="">— Sin cliente —</option>
-                {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+              <label className="label">Obra</label>
+              <select
+                value={formIngreso.obra_id}
+                onChange={(e) => setFormIngreso({ ...formIngreso, obra_id: e.target.value })}
+                className="input"
+                disabled={!formIngreso.cliente_id}
+              >
+                <option value="">— Sin obra —</option>
+                {obras
+                  .filter((o) => !formIngreso.cliente_id || o.cliente_id === Number(formIngreso.cliente_id))
+                  .map((o) => <option key={o.id} value={o.id}>{o.nombre}</option>)}
               </select>
             </div>
             <div>

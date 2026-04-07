@@ -40,7 +40,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
   return NextResponse.json(obra)
 }
 
-// DELETE /api/obras/[id] — soft delete
+// DELETE /api/obras/[id] — soft delete en cascada (obra → ingresos/adicionales/presupuestos)
 export async function DELETE(_req: NextRequest, { params }: Params) {
   const id = Number(params.id)
 
@@ -49,6 +49,15 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: 'Obra no encontrada' }, { status: 404 })
   }
 
-  db.prepare(`UPDATE obras SET deleted_at = datetime('now','localtime') WHERE id = ?`).run(id)
+  const now = "datetime('now','localtime')"
+
+  db.transaction(() => {
+    db.prepare(`UPDATE ingresos      SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(id)
+    db.prepare(`UPDATE adicionales   SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(id)
+    db.prepare(`UPDATE presupuestos  SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(id)
+    db.prepare(`UPDATE compras_proveedor SET deleted_at = ${now} WHERE obra_id = ? AND deleted_at IS NULL`).run(id)
+    db.prepare(`UPDATE obras         SET deleted_at = ${now} WHERE id = ?`).run(id)
+  })()
+
   return NextResponse.json({ ok: true })
 }
