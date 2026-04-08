@@ -6,16 +6,13 @@ export async function GET() {
   const proveedores = db.prepare(`
     SELECT
       p.*,
-      COALESCE(SUM(cp.monto_total), 0)   AS total_compras,
-      COALESCE(SUM(pp.monto), 0)          AS total_pagado,
-      COALESCE(SUM(cp.monto_total), 0)
-        - COALESCE(SUM(pp.monto), 0)      AS deuda_actual,
-      COUNT(DISTINCT cp.id)               AS cantidad_compras
+      COALESCE((SELECT SUM(cp.monto_total) FROM compras_proveedor cp WHERE cp.proveedor_id = p.id AND cp.deleted_at IS NULL), 0) AS total_compras,
+      COALESCE((SELECT SUM(pp.monto)       FROM pagos_proveedor   pp WHERE pp.proveedor_id = p.id AND pp.deleted_at IS NULL), 0) AS total_pagado,
+      COALESCE((SELECT SUM(cp.monto_total) FROM compras_proveedor cp WHERE cp.proveedor_id = p.id AND cp.deleted_at IS NULL), 0)
+        - COALESCE((SELECT SUM(pp.monto)   FROM pagos_proveedor   pp WHERE pp.proveedor_id = p.id AND pp.deleted_at IS NULL), 0) AS deuda_actual,
+      (SELECT COUNT(*) FROM compras_proveedor cp WHERE cp.proveedor_id = p.id AND cp.deleted_at IS NULL) AS cantidad_compras
     FROM proveedores p
-    LEFT JOIN compras_proveedor cp ON cp.proveedor_id = p.id AND cp.deleted_at IS NULL
-    LEFT JOIN pagos_proveedor   pp ON pp.proveedor_id = p.id AND pp.deleted_at IS NULL
     WHERE p.deleted_at IS NULL
-    GROUP BY p.id
     ORDER BY deuda_actual DESC, p.nombre ASC
   `).all()
 

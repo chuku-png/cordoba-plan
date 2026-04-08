@@ -64,6 +64,7 @@ export default function FinanzasPage() {
   const [ingresos,  setIngresos]  = useState<Ingreso[]>([])
   const [gastosFijos, setGastosFijos] = useState<GastoFijo[]>([])
   const [gastosVar,   setGastosVar]   = useState<GastoVariable[]>([])
+  const [jornalesMes, setJornalesMes] = useState<{monto:number;tipo:string}[]>([])
 
   const [obras,    setObras]    = useState<Obra[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -98,14 +99,16 @@ export default function FinanzasPage() {
 
   // ── Carga de datos ─────────────────────────────────────────────────────────
   const cargarPeriodo = useCallback(async () => {
-    const [resI, resF, resV] = await Promise.all([
+    const [resI, resF, resV, resJ] = await Promise.all([
       fetch(`/api/ingresos?mes=${mes}&anio=${anio}`),
       fetch(`/api/gastos-fijos?mes=${mes}&anio=${anio}`),
       fetch(`/api/gastos-variables?mes=${mes}&anio=${anio}`),
+      fetch(`/api/jornales?mes=${mes}&anio=${anio}`),
     ])
     setIngresos(await resI.json())
     setGastosFijos(await resF.json())
     setGastosVar(await resV.json())
+    setJornalesMes(await resJ.json())
   }, [mes, anio])
 
   useEffect(() => { cargarPeriodo() }, [cargarPeriodo])
@@ -121,7 +124,10 @@ export default function FinanzasPage() {
   const totalIngresos   = ingresos.reduce((s, i) => s + i.monto, 0)
   const totalFijos      = gastosFijos.reduce((s, g) => s + g.monto, 0)
   const totalVariables  = gastosVar.reduce((s, g) => s + g.monto, 0)
-  const totalGastos     = totalFijos + totalVariables
+  const totalJornales   = jornalesMes.filter(j => j.tipo === 'jornal').reduce((s, j) => s + j.monto, 0)
+  const totalAnticipios = jornalesMes.filter(j => j.tipo === 'anticipo').reduce((s, j) => s + j.monto, 0)
+  const totalManoObra   = Math.max(0, totalJornales - totalAnticipios)
+  const totalGastos     = totalFijos + totalVariables + totalManoObra
   const resultado       = totalIngresos - totalGastos
 
   // ── Helpers modales ────────────────────────────────────────────────────────
@@ -257,10 +263,11 @@ export default function FinanzasPage() {
       </div>
 
       {/* Tarjetas resumen */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Tarjeta label="Ingresos" valor={totalIngresos} color="text-green-600" />
         <Tarjeta label="Gastos fijos" valor={totalFijos} color="text-red-500" />
         <Tarjeta label="Gastos variables" valor={totalVariables} color="text-orange-500" />
+        <Tarjeta label="Mano de obra" valor={totalManoObra} color="text-yellow-600" />
         <Tarjeta
           label="Resultado neto"
           valor={resultado}

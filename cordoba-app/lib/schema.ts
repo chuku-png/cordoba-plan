@@ -130,7 +130,7 @@ export function initDB() {
       descripcion  TEXT NOT NULL,
       monto_total  REAL NOT NULL DEFAULT 0,
       estado_pago  TEXT NOT NULL DEFAULT 'pendiente'
-                     CHECK(estado_pago IN ('pendiente','pagado')),
+                     CHECK(estado_pago IN ('pendiente','parcial','pagado')),
       fecha        DATE NOT NULL,
       archivo_path TEXT,
       resumen_json TEXT,

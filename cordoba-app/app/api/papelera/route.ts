@@ -46,7 +46,27 @@ export async function POST(req: NextRequest) {
   const exists = db.prepare(`SELECT id FROM ${tabla} WHERE id = ? AND deleted_at IS NOT NULL`).get(Number(id))
   if (!exists) return NextResponse.json({ error: 'Registro no encontrado en la papelera' }, { status: 404 })
 
-  db.prepare(`UPDATE ${tabla} SET deleted_at = NULL WHERE id = ?`).run(Number(id))
+  db.transaction(() => {
+    db.prepare(`UPDATE ${tabla} SET deleted_at = NULL WHERE id = ?`).run(Number(id))
+
+    // Restaurar en cascada según el tipo de registro
+    if (tabla === 'clientes') {
+      const obras = db.prepare(`SELECT id FROM obras WHERE cliente_id = ? AND deleted_at IS NOT NULL`).all(Number(id)) as {id:number}[]
+      for (const obra of obras) {
+        db.prepare(`UPDATE obras           SET deleted_at = NULL WHERE id = ?`).run(obra.id)
+        db.prepare(`UPDATE ingresos        SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(obra.id)
+        db.prepare(`UPDATE adicionales     SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(obra.id)
+        db.prepare(`UPDATE presupuestos    SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(obra.id)
+        db.prepare(`UPDATE compras_proveedor SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(obra.id)
+      }
+    } else if (tabla === 'obras') {
+      db.prepare(`UPDATE ingresos        SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(Number(id))
+      db.prepare(`UPDATE adicionales     SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(Number(id))
+      db.prepare(`UPDATE presupuestos    SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(Number(id))
+      db.prepare(`UPDATE compras_proveedor SET deleted_at = NULL WHERE obra_id = ? AND deleted_at IS NOT NULL`).run(Number(id))
+    }
+  })()
+
   return NextResponse.json({ ok: true })
 }
 

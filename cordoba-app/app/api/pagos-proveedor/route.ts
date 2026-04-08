@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     observaciones?.trim() || null
   )
 
-  // Si el pago cubre el total de la compra, marcarla como pagada
+  // Actualizar estado_pago de la compra según total pagado
   if (compra_id) {
     const compra = db.prepare(`
       SELECT monto_total,
@@ -58,8 +58,9 @@ export async function POST(req: NextRequest) {
       FROM compras_proveedor WHERE id = ?
     `).get(Number(compra_id), Number(compra_id)) as { monto_total: number; pagado: number } | undefined
 
-    if (compra && compra.pagado >= compra.monto_total) {
-      db.prepare(`UPDATE compras_proveedor SET estado_pago = 'pagado' WHERE id = ?`).run(Number(compra_id))
+    if (compra) {
+      const nuevoEstado = compra.pagado >= compra.monto_total ? 'pagado' : compra.pagado > 0 ? 'parcial' : 'pendiente'
+      db.prepare(`UPDATE compras_proveedor SET estado_pago = ? WHERE id = ?`).run(nuevoEstado, Number(compra_id))
     }
   }
 

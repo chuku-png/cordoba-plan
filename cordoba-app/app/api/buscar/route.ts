@@ -54,8 +54,8 @@ export async function GET(req: NextRequest) {
       '/finanzas' AS href
     FROM ingresos i
     LEFT JOIN clientes c ON c.id = i.cliente_id
-    WHERE i.deleted_at IS NULL AND c.nombre LIKE ? LIMIT 5
-  `).all(like)
+    WHERE i.deleted_at IS NULL AND (c.nombre LIKE ? OR (i.cliente_id IS NULL AND i.tipo LIKE ?)) LIMIT 5
+  `).all(like, like)
 
   const presupuestos = db.prepare(`
     SELECT 'presupuesto' AS tipo, pr.id,

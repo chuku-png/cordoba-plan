@@ -47,9 +47,9 @@ function pdfResumenMensual(mes: string, anio: string): Uint8Array {
 
   // Ingresos
   const ingresos = db.prepare(`
-    SELECT i.tipo AS concepto, i.forma_pago, c.nombre AS cliente, o.nombre AS obra, i.monto, i.fecha
+    SELECT i.tipo AS concepto, i.forma_pago, COALESCE(c.nombre, '—') AS cliente, o.nombre AS obra, i.monto, i.fecha
     FROM ingresos i
-    JOIN clientes c ON c.id = i.cliente_id
+    LEFT JOIN clientes c ON c.id = i.cliente_id
     LEFT JOIN obras o ON o.id = i.obra_id
     WHERE i.deleted_at IS NULL
       AND strftime('%m', i.fecha) = ? AND strftime('%Y', i.fecha) = ?
@@ -238,9 +238,9 @@ function xlsxClientes(): Uint8Array {
 
 function xlsxIngresosMes(mes: string, anio: string): Uint8Array {
   const ingresos = db.prepare(`
-    SELECT i.tipo, i.forma_pago, c.nombre AS cliente, o.nombre AS obra, i.monto, i.fecha, i.observaciones
+    SELECT i.tipo, i.forma_pago, COALESCE(c.nombre, '—') AS cliente, o.nombre AS obra, i.monto, i.fecha, i.observaciones
     FROM ingresos i
-    JOIN clientes c ON c.id = i.cliente_id
+    LEFT JOIN clientes c ON c.id = i.cliente_id
     LEFT JOIN obras o ON o.id = i.obra_id
     WHERE i.deleted_at IS NULL
       AND strftime('%m', i.fecha) = ? AND strftime('%Y', i.fecha) = ?

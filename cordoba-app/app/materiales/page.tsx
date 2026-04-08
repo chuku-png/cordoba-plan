@@ -224,9 +224,8 @@ export default function MaterialesPage() {
   const totalPagado = comprasFiltradas.reduce((s, c) => s + c.total_pagado, 0)
   const totalPendiente = totalMonto - totalPagado
 
-  const FormCompra = () => {
-    const obrasFiltradas = obras.filter(o => !formCliente || o.cliente_id === Number(formCliente))
-    return (
+  const obrasFiltradas = obras.filter(o => !formCliente || o.cliente_id === Number(formCliente))
+  const formCompraJSX = (
     <div className="space-y-4">
       {error && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
@@ -289,7 +288,6 @@ export default function MaterialesPage() {
       </div>
     </div>
   )
-  }
 
   return (
     <div className="space-y-6">
@@ -427,14 +425,14 @@ export default function MaterialesPage() {
       {/* Modal Nueva compra */}
       {modalNueva && (
         <Modal titulo="Nueva compra con archivo" onClose={() => setModalNueva(false)} ancho="max-w-xl">
-          <FormCompra />
+          {formCompraJSX}
         </Modal>
       )}
 
       {/* Modal Editar compra */}
       {modalEditar && (
         <Modal titulo="Editar compra" onClose={() => setModalEditar(null)} ancho="max-w-xl">
-          <FormCompra />
+          {formCompraJSX}
         </Modal>
       )}
 

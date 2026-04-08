@@ -24,6 +24,12 @@ export async function GET(req: NextRequest) {
   if (desde) { sql += ' AND j.fecha >= ?'; args.push(desde) }
   if (hasta) { sql += ' AND j.fecha <= ?'; args.push(hasta) }
   if (empleadoId) { sql += ' AND j.empleado_id = ?'; args.push(Number(empleadoId)) }
+  const mes  = searchParams.get('mes')
+  const anio = searchParams.get('anio')
+  if (mes && anio) {
+    sql += ` AND strftime('%m', j.fecha) = ? AND strftime('%Y', j.fecha) = ?`
+    args.push(String(mes).padStart(2,'0'), String(anio))
+  }
 
   sql += ' ORDER BY j.fecha ASC, j.created_at ASC'
 

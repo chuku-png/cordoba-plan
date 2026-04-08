@@ -55,23 +55,27 @@ export async function GET() {
   const domingo = new Date(lunes); domingo.setDate(lunes.getDate() + 6)
   const fmt = (d: Date) => d.toISOString().slice(0, 10)
 
-  const { a_pagar_semana } = db.prepare(`
-    SELECT COALESCE(SUM(monto), 0) AS a_pagar_semana
+  const { jornales_semana, anticipos_semana } = db.prepare(`
+    SELECT
+      COALESCE(SUM(CASE WHEN tipo = 'jornal'  THEN monto ELSE 0 END), 0) AS jornales_semana,
+      COALESCE(SUM(CASE WHEN tipo = 'anticipo' THEN monto ELSE 0 END), 0) AS anticipos_semana
     FROM jornales
     WHERE deleted_at IS NULL
       AND fecha >= ? AND fecha <= ?
-  `).get(fmt(lunes), fmt(domingo)) as { a_pagar_semana: number }
+  `).get(fmt(lunes), fmt(domingo)) as { jornales_semana: number; anticipos_semana: number }
+  const a_pagar_semana = Math.max(0, jornales_semana - anticipos_semana)
 
   // Deuda total con proveedores
-  const { deuda_proveedores } = db.prepare(`
+  const { deuda_proveedores_raw } = db.prepare(`
     SELECT
       COALESCE(
         (SELECT SUM(monto_total) FROM compras_proveedor WHERE deleted_at IS NULL), 0
       ) -
       COALESCE(
         (SELECT SUM(monto) FROM pagos_proveedor WHERE deleted_at IS NULL), 0
-      ) AS deuda_proveedores
-  `).get() as { deuda_proveedores: number }
+      ) AS deuda_proveedores_raw
+  `).get() as { deuda_proveedores_raw: number }
+  const deuda_proveedores = Math.max(0, deuda_proveedores_raw)
 
   // Adicionales pendientes de cobro
   const { adicionales_pendientes } = db.prepare(`
