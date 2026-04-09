@@ -338,7 +338,7 @@ export default function Dashboard() {
           <ul className="space-y-1.5">
             {notasPendientes.map(n => {
               const ahora = new Date()
-              const venc = n.vencimiento ? new Date(n.vencimiento) : null
+              const venc = n.vencimiento ? new Date(n.vencimiento.length === 16 ? n.vencimiento + ':00' : n.vencimiento) : null
               const vencido = venc && venc < ahora
               const hoy = venc && !vencido && venc.toDateString() === ahora.toDateString()
               const vencLabel = venc
