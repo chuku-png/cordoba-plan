@@ -20,6 +20,7 @@ interface Presupuesto {
 }
 
 interface Obra { id: number; nombre: string; cliente_id: number }
+interface Cliente { id: number; nombre: string }
 
 const fmt = (n: number) =>
   new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(n)
@@ -37,6 +38,8 @@ const estadoInfo = (estado: string) =>
 export default function PresupuestosPage() {
   const [presupuestos, setPresupuestos] = useState<Presupuesto[]>([])
   const [obras, setObras] = useState<Obra[]>([])
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [formCliente, setFormCliente] = useState('')
   const [loading, setLoading] = useState(true)
 
   // Filtros
@@ -74,7 +77,10 @@ export default function PresupuestosPage() {
   useEffect(() => { cargar() }, [cargar])
 
   useEffect(() => {
-    fetch('/api/obras').then(r => r.json()).then(setObras)
+    Promise.all([
+      fetch('/api/obras').then(r => r.json()),
+      fetch('/api/clientes').then(r => r.json()),
+    ]).then(([o, c]) => { setObras(o); setClientes(c) })
   }, [])
 
   const abrirNuevo = () => {
@@ -86,11 +92,14 @@ export default function PresupuestosPage() {
       archivo_path: '',
       notas: '',
     })
+    setFormCliente('')
     setError('')
     setModalNuevo(true)
   }
 
   const abrirEditar = (p: Presupuesto) => {
+    const obraDelCliente = p.obra_id ? obras.find(o => o.id === p.obra_id) : null
+    setFormCliente(obraDelCliente ? String(obraDelCliente.cliente_id) : '')
     setForm({
       obra_id: p.obra_id ? String(p.obra_id) : '',
       monto: String(p.monto),
@@ -186,15 +195,24 @@ export default function PresupuestosPage() {
   const countPendientes = presupuestos.filter(p => p.estado === 'sin_respuesta' || p.estado === 'enviado').length
   const montoAceptados  = presupuestos.filter(p => p.estado === 'aceptado').reduce((s, p) => s + p.monto, 0)
 
-  const FormPresupuesto = () => (
+  const obrasFiltradas = obras.filter(o => !formCliente || o.cliente_id === Number(formCliente))
+
+  const formPresupuestoJSX = (
     <div className="space-y-4">
       {error && <p className="text-sm text-red-600 bg-red-50 rounded p-2">{error}</p>}
       <div className="grid grid-cols-2 gap-3">
         <div>
+          <label className="label">Cliente</label>
+          <select className="input" value={formCliente} onChange={e => { setFormCliente(e.target.value); setForm(f => ({ ...f, obra_id: '' })) }}>
+            <option value="">Todos los clientes</option>
+            {clientes.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        </div>
+        <div>
           <label className="label">Obra</label>
           <select className="input" value={form.obra_id} onChange={e => setForm(f => ({ ...f, obra_id: e.target.value }))}>
             <option value="">Sin obra</option>
-            {obras.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
+            {obrasFiltradas.map(o => <option key={o.id} value={o.id}>{o.nombre}</option>)}
           </select>
         </div>
         <div>
@@ -400,14 +418,14 @@ export default function PresupuestosPage() {
       {/* Modal Nuevo */}
       {modalNuevo && (
         <Modal titulo="Nuevo presupuesto" onClose={() => setModalNuevo(false)} ancho="max-w-xl">
-          <FormPresupuesto />
+          {formPresupuestoJSX}
         </Modal>
       )}
 
       {/* Modal Editar */}
       {modalEditar && (
         <Modal titulo="Editar presupuesto" onClose={() => setModalEditar(null)} ancho="max-w-xl">
-          <FormPresupuesto />
+          {formPresupuestoJSX}
         </Modal>
       )}
 

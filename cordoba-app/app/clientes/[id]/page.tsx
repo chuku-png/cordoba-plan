@@ -58,17 +58,30 @@ export default function FichaClientePage({ params }: { params: { id: string } })
   const [eliminandoObra, setEliminandoObra] = useState<Obra | null>(null)
   const [cargandoEliminar, setCargandoEliminar] = useState(false)
 
+  // Proveedores para forms del popup
+  const [proveedores, setProveedores] = useState<{id:number;nombre:string}[]>([])
+
   // Popup detalle obra
   const [obraDetalle, setObraDetalle] = useState<Obra | null>(null)
   const [detalleData, setDetalleData] = useState<{
     ingresos: {id:number;tipo:string;monto:number;fecha:string;forma_pago:string}[]
     materiales: {id:number;descripcion:string;monto_total:number;estado_pago:string;proveedor_nombre:string}[]
-    adicionales: {id:number;descripcion:string;monto_total:number;monto_mano_obra:number;estado:string;fecha:string|null}[]
+    adicionales: {id:number;descripcion:string;monto_total:number;monto_mano_obra:number;monto_material:number;estado:string;fecha:string|null}[]
     presupuestos: {id:number;monto:number;estado:string;fecha_envio:string|null;notas:string|null}[]
   } | null>(null)
   const [detalleTab, setDetalleTab] = useState<'ingresos'|'materiales'|'adicionales'|'presupuestos'>('ingresos')
-  const [formCobro, setFormCobro] = useState<{visible:boolean;monto:string;forma_pago:string;fecha:string;tipo:string}>({visible:false,monto:'',forma_pago:'transferencia',fecha:new Date().toISOString().slice(0,10),tipo:'pago_parcial'})
+
+  // Forms cobro — separados por tipo
+  const hoy = new Date().toISOString().slice(0,10)
+  const [formCobroMO,  setFormCobroMO]  = useState({visible:false,monto:'',forma_pago:'transferencia',fecha:hoy,tipo:'pago_parcial'})
+  const [formCobroMat, setFormCobroMat] = useState({visible:false,monto:'',forma_pago:'transferencia',fecha:hoy})
   const [guardandoCobro, setGuardandoCobro] = useState(false)
+
+  // Forms nuevo material / adicional / presupuesto
+  const [formMat,  setFormMat]  = useState({visible:false,proveedor_id:'',descripcion:'',monto_total:'',fecha:hoy})
+  const [formAdic, setFormAdic] = useState({visible:false,descripcion:'',monto_mano_obra:'',monto_material:'',proveedor_id:'',fecha:hoy})
+  const [formPres, setFormPres] = useState({visible:false,monto:'',estado:'sin_respuesta',fecha_envio:hoy,notas:''})
+  const [guardandoForm, setGuardandoForm] = useState(false)
 
   const cargarDetalle = async (obra: Obra) => {
     const [ing, mat, adic, pres] = await Promise.all([
@@ -84,33 +97,84 @@ export default function FichaClientePage({ params }: { params: { id: string } })
     setObraDetalle(obra)
     setDetalleData(null)
     setDetalleTab('ingresos')
-    setFormCobro({visible:false,monto:'',forma_pago:'transferencia',fecha:new Date().toISOString().slice(0,10),tipo:'pago_parcial'})
+    const h = new Date().toISOString().slice(0,10)
+    setFormCobroMO({visible:false,monto:'',forma_pago:'transferencia',fecha:h,tipo:'pago_parcial'})
+    setFormCobroMat({visible:false,monto:'',forma_pago:'transferencia',fecha:h})
+    setFormMat({visible:false,proveedor_id:'',descripcion:'',monto_total:'',fecha:h})
+    setFormAdic({visible:false,descripcion:'',monto_mano_obra:'',monto_material:'',proveedor_id:'',fecha:h})
+    setFormPres({visible:false,monto:'',estado:'sin_respuesta',fecha_envio:h,notas:''})
     await cargarDetalle(obra)
   }
 
-  const registrarCobro = async () => {
-    if (!obraDetalle || !formCobro.monto) return
-    setGuardandoCobro(true)
-    await fetch('/api/ingresos', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({
-        obra_id: obraDetalle.id,
-        cliente_id: cliente?.id,
-        tipo: formCobro.tipo,
-        monto: Number(formCobro.monto),
-        forma_pago: formCobro.forma_pago,
-        fecha: formCobro.fecha,
-      }),
-    })
-    setFormCobro(f => ({...f, visible:false, monto:''}))
-    await cargarDetalle(obraDetalle)
+  const refrescarCliente = async () => {
     const res = await fetch(`/api/clientes/${id}`)
     const clienteActualizado = await res.json()
     setCliente(clienteActualizado)
-    const obraActualizada = clienteActualizado.obras?.find((o: Obra) => o.id === obraDetalle.id)
+    const obraActualizada = clienteActualizado.obras?.find((o: Obra) => o.id === obraDetalle?.id)
     if (obraActualizada) setObraDetalle(obraActualizada)
+  }
+
+  const registrarCobroMO = async () => {
+    if (!obraDetalle || !formCobroMO.monto) return
+    setGuardandoCobro(true)
+    await fetch('/api/ingresos', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ obra_id: obraDetalle.id, cliente_id: cliente?.id, tipo: formCobroMO.tipo, monto: Number(formCobroMO.monto), forma_pago: formCobroMO.forma_pago, fecha: formCobroMO.fecha }),
+    })
+    setFormCobroMO(f => ({...f, visible:false, monto:''}))
+    await cargarDetalle(obraDetalle)
+    await refrescarCliente()
     setGuardandoCobro(false)
+  }
+
+  const registrarCobroMat = async () => {
+    if (!obraDetalle || !formCobroMat.monto) return
+    setGuardandoCobro(true)
+    await fetch('/api/ingresos', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ obra_id: obraDetalle.id, cliente_id: cliente?.id, tipo: 'entrega_materiales', monto: Number(formCobroMat.monto), forma_pago: formCobroMat.forma_pago, fecha: formCobroMat.fecha }),
+    })
+    setFormCobroMat(f => ({...f, visible:false, monto:''}))
+    await cargarDetalle(obraDetalle)
+    await refrescarCliente()
+    setGuardandoCobro(false)
+  }
+
+  const guardarMaterial = async () => {
+    if (!obraDetalle || !formMat.proveedor_id || !formMat.descripcion.trim() || !formMat.monto_total) return
+    setGuardandoForm(true)
+    await fetch('/api/materiales', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ proveedor_id: Number(formMat.proveedor_id), obra_id: obraDetalle.id, descripcion: formMat.descripcion.trim(), monto_total: Number(formMat.monto_total), fecha: formMat.fecha }),
+    })
+    setFormMat(f => ({...f, visible:false, proveedor_id:'', descripcion:'', monto_total:''}))
+    await cargarDetalle(obraDetalle)
+    setGuardandoForm(false)
+  }
+
+  const guardarAdicional = async () => {
+    if (!obraDetalle || !formAdic.descripcion.trim()) return
+    setGuardandoForm(true)
+    await fetch('/api/adicionales', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ obra_id: obraDetalle.id, descripcion: formAdic.descripcion.trim(), monto_mano_obra: Number(formAdic.monto_mano_obra)||0, monto_material: Number(formAdic.monto_material)||0, proveedor_id: formAdic.proveedor_id ? Number(formAdic.proveedor_id) : null, fecha: formAdic.fecha }),
+    })
+    setFormAdic(f => ({...f, visible:false, descripcion:'', monto_mano_obra:'', monto_material:'', proveedor_id:''}))
+    await cargarDetalle(obraDetalle)
+    await refrescarCliente()
+    setGuardandoForm(false)
+  }
+
+  const guardarPresupuesto = async () => {
+    if (!obraDetalle || !formPres.monto) return
+    setGuardandoForm(true)
+    await fetch('/api/presupuestos', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ obra_id: obraDetalle.id, monto: Number(formPres.monto), estado: formPres.estado, fecha_envio: formPres.fecha_envio || null, notas: formPres.notas.trim() || null }),
+    })
+    setFormPres(f => ({...f, visible:false, monto:'', notas:''}))
+    await cargarDetalle(obraDetalle)
+    setGuardandoForm(false)
   }
 
   const cargar = useCallback(async () => {
@@ -121,6 +185,7 @@ export default function FichaClientePage({ params }: { params: { id: string } })
   }, [id, router])
 
   useEffect(() => { cargar() }, [cargar])
+  useEffect(() => { fetch('/api/proveedores').then(r=>r.json()).then(setProveedores) }, [])
 
   const abrirNuevaObra = () => {
     setObraEditando(null)
@@ -347,20 +412,22 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                 placeholder="Ej: Ampliación cocina"
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Presupuesto original ($)
-              </label>
-              <input
-                type="number"
-                min="0"
-                step="1000"
-                value={formObra.presupuesto_original}
-                onChange={(e) => setFormObra({ ...formObra, presupuesto_original: e.target.value })}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a1a2e]/20"
-                placeholder="0"
-              />
-            </div>
+            {obraEditando && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Presupuesto original ($)
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  value={formObra.presupuesto_original}
+                  onChange={(e) => setFormObra({ ...formObra, presupuesto_original: e.target.value })}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#1a1a2e]/20"
+                  placeholder="0"
+                />
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de inicio</label>
               <input
@@ -418,28 +485,22 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                   const presup = detalleData.presupuestos[0]
                   const totalPresup = presup ? presup.monto : (obraDetalle.presupuesto_original ?? 0)
                   const moPresup = Math.max(0, totalPresup - totalMateriales)
-
                   const cobradoMat = detalleData.ingresos.filter(i=>i.tipo==='entrega_materiales').reduce((s,i)=>s+i.monto,0)
                   const cobradoMO  = detalleData.ingresos.filter(i=>i.tipo!=='entrega_materiales').reduce((s,i)=>s+i.monto,0)
                   const pendienteMat = Math.max(0, totalMateriales - cobradoMat)
                   const pendienteMO  = Math.max(0, moPresup - cobradoMO)
                   const pendienteTotal = pendienteMat + pendienteMO
-
-                  const montoNum = Number(formCobro.monto) || 0
-                  const esPagoFinalValido = montoNum >= pendienteTotal && pendienteTotal > 0
+                  const montoMONum = Number(formCobroMO.monto) || 0
+                  const esPagoFinalValido = montoMONum >= pendienteTotal && pendienteTotal > 0
 
                   return (
                     <div className="space-y-3">
-                      {/* Resumen separado */}
+                      {/* Resumen */}
                       <div className="grid grid-cols-2 gap-2">
                         <div className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-400 mb-1">Mano de obra</p>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">Total</span><span className="font-medium">{fmt(moPresup)}</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">Cobrado</span><span className="text-green-600">{fmt(cobradoMO)}</span>
-                          </div>
+                          <div className="flex justify-between text-xs"><span className="text-gray-500">Total</span><span className="font-medium">{fmt(moPresup)}</span></div>
+                          <div className="flex justify-between text-xs"><span className="text-gray-500">Cobrado</span><span className="text-green-600">{fmt(cobradoMO)}</span></div>
                           <div className="flex justify-between text-xs font-semibold mt-1 pt-1 border-t border-gray-200">
                             <span className={pendienteMO>0?'text-orange-600':'text-green-700'}>Pendiente</span>
                             <span className={pendienteMO>0?'text-orange-600':'text-green-700'}>{fmt(pendienteMO)}</span>
@@ -447,19 +508,14 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                         </div>
                         <div className="bg-gray-50 rounded-lg p-3">
                           <p className="text-xs text-gray-400 mb-1">Materiales</p>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">Total</span><span className="font-medium">{fmt(totalMateriales)}</span>
-                          </div>
-                          <div className="flex justify-between text-xs">
-                            <span className="text-gray-500">Cobrado</span><span className="text-green-600">{fmt(cobradoMat)}</span>
-                          </div>
+                          <div className="flex justify-between text-xs"><span className="text-gray-500">Total</span><span className="font-medium">{fmt(totalMateriales)}</span></div>
+                          <div className="flex justify-between text-xs"><span className="text-gray-500">Cobrado</span><span className="text-green-600">{fmt(cobradoMat)}</span></div>
                           <div className="flex justify-between text-xs font-semibold mt-1 pt-1 border-t border-gray-200">
                             <span className={pendienteMat>0?'text-orange-600':'text-green-700'}>Pendiente</span>
                             <span className={pendienteMat>0?'text-orange-600':'text-green-700'}>{fmt(pendienteMat)}</span>
                           </div>
                         </div>
                       </div>
-                      {/* Barra progreso total */}
                       {totalPresup > 0 && (
                         <div className="w-full bg-gray-200 rounded-full h-1.5">
                           <div className="bg-green-500 h-1.5 rounded-full" style={{width:`${Math.min(100,(cobradoMat+cobradoMO)/totalPresup*100).toFixed(1)}%`}} />
@@ -478,50 +534,87 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                           </tbody>
                         </table>
                       ) : <p className="text-sm text-gray-400 text-center py-3">Sin cobros registrados.</p>}
-                      {/* Form registrar cobro */}
-                      {formCobro.visible ? (
-                        <div className="border border-gray-200 rounded-lg p-3 space-y-3 bg-gray-50">
-                          <p className="text-xs font-medium text-gray-600">Registrar cobro</p>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className="label">Tipo</label>
-                              <select className="input" value={formCobro.tipo} onChange={e=>setFormCobro(f=>({...f,tipo:e.target.value}))}>
-                                <option value="anticipo">Anticipo</option>
-                                <option value="entrega_materiales">Entrega materiales</option>
-                                <option value="pago_parcial">Pago parcial</option>
-                                {esPagoFinalValido && <option value="pago_final">Pago final</option>}
-                              </select>
-                              {formCobro.tipo==='pago_final' && !esPagoFinalValido && (
-                                <p className="text-xs text-orange-500 mt-1">El monto debe cubrir el pendiente ({fmt(pendienteTotal)})</p>
-                              )}
+
+                      {/* Botones cobro — dos separados */}
+                      <div className="grid grid-cols-2 gap-2">
+                        {/* Cobro mano de obra */}
+                        {formCobroMO.visible ? (
+                          <div className="col-span-2 border border-blue-200 rounded-lg p-3 space-y-2 bg-blue-50">
+                            <p className="text-xs font-medium text-blue-700">Cobro — Mano de obra</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="label">Tipo</label>
+                                <select className="input" value={formCobroMO.tipo} onChange={e=>setFormCobroMO(f=>({...f,tipo:e.target.value}))}>
+                                  <option value="anticipo">Anticipo</option>
+                                  <option value="pago_parcial">Pago parcial</option>
+                                  {esPagoFinalValido && <option value="pago_final">Pago final</option>}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="label">Forma de pago</label>
+                                <select className="input" value={formCobroMO.forma_pago} onChange={e=>setFormCobroMO(f=>({...f,forma_pago:e.target.value}))}>
+                                  <option value="transferencia">Transferencia</option>
+                                  <option value="efectivo">Efectivo</option>
+                                  <option value="cheque">Cheque</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="label">Monto</label>
+                                <input className="input" type="number" min="0" value={formCobroMO.monto} onChange={e=>setFormCobroMO(f=>({...f,monto:e.target.value}))} placeholder={pendienteMO>0?String(Math.round(pendienteMO)):''} />
+                              </div>
+                              <div>
+                                <label className="label">Fecha</label>
+                                <input className="input" type="date" value={formCobroMO.fecha} onChange={e=>setFormCobroMO(f=>({...f,fecha:e.target.value}))} />
+                              </div>
                             </div>
-                            <div>
-                              <label className="label">Forma de pago</label>
-                              <select className="input" value={formCobro.forma_pago} onChange={e=>setFormCobro(f=>({...f,forma_pago:e.target.value}))}>
-                                <option value="transferencia">Transferencia</option>
-                                <option value="efectivo">Efectivo</option>
-                                <option value="cheque">Cheque</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className="label">Monto</label>
-                              <input className="input" type="number" min="0" value={formCobro.monto} onChange={e=>setFormCobro(f=>({...f,monto:e.target.value}))} placeholder={pendienteTotal>0?String(pendienteTotal):''} />
-                            </div>
-                            <div>
-                              <label className="label">Fecha</label>
-                              <input className="input" type="date" value={formCobro.fecha} onChange={e=>setFormCobro(f=>({...f,fecha:e.target.value}))} />
+                            <div className="flex gap-2 justify-end">
+                              <button className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-100" onClick={()=>setFormCobroMO(f=>({...f,visible:false}))}>Cancelar</button>
+                              <button className="px-3 py-1.5 text-xs bg-blue-700 text-white rounded-lg hover:bg-blue-800 disabled:opacity-50" onClick={registrarCobroMO} disabled={guardandoCobro||!formCobroMO.monto}>{guardandoCobro?'Guardando...':'Guardar'}</button>
                             </div>
                           </div>
-                          <div className="flex gap-2 justify-end">
-                            <button className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-100" onClick={()=>setFormCobro(f=>({...f,visible:false}))}>Cancelar</button>
-                            <button className="px-3 py-1.5 text-xs bg-[#1a1a2e] text-white rounded-lg hover:bg-[#16213e] disabled:opacity-50" onClick={registrarCobro} disabled={guardandoCobro||!formCobro.monto}>{guardandoCobro?'Guardando...':'Guardar cobro'}</button>
+                        ) : (
+                          <button onClick={()=>{setFormCobroMat(f=>({...f,visible:false}));setFormCobroMO(f=>({...f,visible:true,monto:pendienteMO>0?String(Math.round(pendienteMO)):''}))}}
+                            className="py-2 text-xs border-2 border-dashed border-blue-200 rounded-lg text-blue-400 hover:border-blue-500 hover:text-blue-600 transition-colors">
+                            + Cobro mano de obra
+                          </button>
+                        )}
+
+                        {/* Cobro materiales */}
+                        {formCobroMat.visible ? (
+                          <div className="col-span-2 border border-orange-200 rounded-lg p-3 space-y-2 bg-orange-50">
+                            <p className="text-xs font-medium text-orange-700">Cobro — Materiales</p>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="label">Forma de pago</label>
+                                <select className="input" value={formCobroMat.forma_pago} onChange={e=>setFormCobroMat(f=>({...f,forma_pago:e.target.value}))}>
+                                  <option value="transferencia">Transferencia</option>
+                                  <option value="efectivo">Efectivo</option>
+                                  <option value="cheque">Cheque</option>
+                                </select>
+                              </div>
+                              <div>
+                                <label className="label">Fecha</label>
+                                <input className="input" type="date" value={formCobroMat.fecha} onChange={e=>setFormCobroMat(f=>({...f,fecha:e.target.value}))} />
+                              </div>
+                              <div className="col-span-2">
+                                <label className="label">Monto</label>
+                                <input className="input" type="number" min="0" value={formCobroMat.monto} onChange={e=>setFormCobroMat(f=>({...f,monto:e.target.value}))} placeholder={pendienteMat>0?String(Math.round(pendienteMat)):''} />
+                              </div>
+                            </div>
+                            <div className="flex gap-2 justify-end">
+                              <button className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-100" onClick={()=>setFormCobroMat(f=>({...f,visible:false}))}>Cancelar</button>
+                              <button className="px-3 py-1.5 text-xs bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50" onClick={registrarCobroMat} disabled={guardandoCobro||!formCobroMat.monto}>{guardandoCobro?'Guardando...':'Guardar'}</button>
+                            </div>
                           </div>
-                        </div>
-                      ) : (
-                        <button onClick={()=>setFormCobro(f=>({...f,visible:true,monto:pendienteTotal>0?String(Math.round(pendienteTotal)):''}))} className="w-full py-2 text-sm border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-[#1a1a2e] hover:text-[#1a1a2e] transition-colors">
-                          + Registrar cobro
-                        </button>
-                      )}
+                        ) : (
+                          !formCobroMO.visible && (
+                            <button onClick={()=>{setFormCobroMO(f=>({...f,visible:false}));setFormCobroMat(f=>({...f,visible:true,monto:pendienteMat>0?String(Math.round(pendienteMat)):''}))}}
+                              className="py-2 text-xs border-2 border-dashed border-orange-200 rounded-lg text-orange-400 hover:border-orange-500 hover:text-orange-600 transition-colors">
+                              + Cobro materiales
+                            </button>
+                          )
+                        )}
+                      </div>
                     </div>
                   )
                 })()}
@@ -530,19 +623,54 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                 {detalleTab==='materiales' && (
                   <div className="space-y-2">
                     {detalleData.materiales.length===0
-                      ? <p className="text-sm text-gray-400 text-center py-6">Sin compras de materiales.</p>
+                      ? <p className="text-sm text-gray-400 text-center py-4">Sin compras de materiales.</p>
                       : <table className="w-full text-sm">
                           <thead className="bg-gray-50 text-gray-600 text-xs"><tr><th className="text-left px-3 py-2">Descripción</th><th className="text-left px-3 py-2">Proveedor</th><th className="text-center px-3 py-2">Estado</th><th className="text-right px-3 py-2">Monto</th></tr></thead>
                           <tbody className="divide-y divide-gray-100">
                             {detalleData.materiales.map(m=>(
-                              <tr key={m.id}><td className="px-3 py-2">{m.descripcion}</td><td className="px-3 py-2 text-gray-500">{m.proveedor_nombre}</td><td className="px-3 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${m.estado_pago==='pagado'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{m.estado_pago}</span></td><td className="px-3 py-2 text-right font-medium">{fmt(m.monto_total)}</td></tr>
+                              <tr key={m.id}><td className="px-3 py-2">{m.descripcion}</td><td className="px-3 py-2 text-gray-500">{m.proveedor_nombre}</td><td className="px-3 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${m.estado_pago==='pagado'?'bg-green-100 text-green-700':m.estado_pago==='parcial'?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-700'}`}>{m.estado_pago}</span></td><td className="px-3 py-2 text-right font-medium">{fmt(m.monto_total)}</td></tr>
                             ))}
                             <tr className="bg-gray-50 font-semibold"><td colSpan={3} className="px-3 py-2 text-right text-gray-600">Total</td><td className="px-3 py-2 text-right">{fmt(detalleData.materiales.reduce((s,m)=>s+m.monto_total,0))}</td></tr>
                           </tbody>
                         </table>
                     }
-                    <Link href={`/materiales?obra_id=${obraDetalle.id}`} className="flex items-center justify-center gap-1 py-2 text-xs text-[#1a1a2e] hover:underline">
-                      Ver materiales de esta obra →
+                    {/* Form nuevo material */}
+                    {formMat.visible ? (
+                      <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600">Nueva compra de materiales</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="label">Proveedor *</label>
+                            <select className="input" value={formMat.proveedor_id} onChange={e=>setFormMat(f=>({...f,proveedor_id:e.target.value}))}>
+                              <option value="">Seleccionar...</option>
+                              {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="label">Fecha</label>
+                            <input className="input" type="date" value={formMat.fecha} onChange={e=>setFormMat(f=>({...f,fecha:e.target.value}))} />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="label">Descripción *</label>
+                            <input className="input" value={formMat.descripcion} onChange={e=>setFormMat(f=>({...f,descripcion:e.target.value}))} placeholder="Ej: Cemento, arena, ladrillos" />
+                          </div>
+                          <div className="col-span-2">
+                            <label className="label">Monto total *</label>
+                            <input className="input" type="number" min="0" value={formMat.monto_total} onChange={e=>setFormMat(f=>({...f,monto_total:e.target.value}))} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-100" onClick={()=>setFormMat(f=>({...f,visible:false}))}>Cancelar</button>
+                          <button className="px-3 py-1.5 text-xs bg-[#1a1a2e] text-white rounded-lg hover:bg-[#16213e] disabled:opacity-50" onClick={guardarMaterial} disabled={guardandoForm||!formMat.proveedor_id||!formMat.descripcion||!formMat.monto_total}>{guardandoForm?'Guardando...':'Guardar'}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={()=>setFormMat(f=>({...f,visible:true}))} className="w-full py-2 text-xs border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-[#1a1a2e] hover:text-[#1a1a2e] transition-colors">
+                        + Agregar compra de materiales
+                      </button>
+                    )}
+                    <Link href={`/materiales?obra_id=${obraDetalle.id}`} className="flex items-center justify-center gap-1 py-1 text-xs text-[#1a1a2e] hover:underline">
+                      Ver en página de materiales →
                     </Link>
                   </div>
                 )}
@@ -551,17 +679,62 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                 {detalleTab==='adicionales' && (
                   <div className="space-y-2">
                     {detalleData.adicionales.length===0
-                      ? <p className="text-sm text-gray-400 text-center py-6">Sin adicionales.</p>
+                      ? <p className="text-sm text-gray-400 text-center py-4">Sin adicionales.</p>
                       : <table className="w-full text-sm">
-                          <thead className="bg-gray-50 text-gray-600 text-xs"><tr><th className="text-left px-3 py-2">Descripción</th><th className="text-left px-3 py-2">Fecha</th><th className="text-center px-3 py-2">Estado</th><th className="text-right px-3 py-2">Monto</th></tr></thead>
+                          <thead className="bg-gray-50 text-gray-600 text-xs"><tr><th className="text-left px-3 py-2">Descripción</th><th className="text-right px-3 py-2">MO</th><th className="text-right px-3 py-2">Mat.</th><th className="text-center px-3 py-2">Estado</th><th className="text-right px-3 py-2">Total</th></tr></thead>
                           <tbody className="divide-y divide-gray-100">
                             {detalleData.adicionales.map(a=>(
-                              <tr key={a.id}><td className="px-3 py-2">{a.descripcion}</td><td className="px-3 py-2 text-gray-500">{a.fecha??'—'}</td><td className="px-3 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${a.estado==='cobrado'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{a.estado}</span></td><td className="px-3 py-2 text-right font-medium">{fmt(a.monto_total)}</td></tr>
+                              <tr key={a.id}>
+                                <td className="px-3 py-2">{a.descripcion}</td>
+                                <td className="px-3 py-2 text-right text-gray-500 text-xs">{fmt(a.monto_mano_obra)}</td>
+                                <td className="px-3 py-2 text-right text-gray-500 text-xs">{fmt(a.monto_material)}</td>
+                                <td className="px-3 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${a.estado==='cobrado'?'bg-green-100 text-green-700':'bg-orange-100 text-orange-700'}`}>{a.estado}</span></td>
+                                <td className="px-3 py-2 text-right font-medium">{fmt(a.monto_total)}</td>
+                              </tr>
                             ))}
-                            <tr className="bg-gray-50 font-semibold"><td colSpan={3} className="px-3 py-2 text-right text-gray-600">Total</td><td className="px-3 py-2 text-right">{fmt(detalleData.adicionales.reduce((s,a)=>s+a.monto_total,0))}</td></tr>
+                            <tr className="bg-gray-50 font-semibold"><td colSpan={4} className="px-3 py-2 text-right text-gray-600">Total</td><td className="px-3 py-2 text-right">{fmt(detalleData.adicionales.reduce((s,a)=>s+a.monto_total,0))}</td></tr>
                           </tbody>
                         </table>
                     }
+                    {/* Form nuevo adicional */}
+                    {formAdic.visible ? (
+                      <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600">Nuevo adicional</p>
+                        <div className="col-span-2">
+                          <label className="label">Descripción *</label>
+                          <input className="input" value={formAdic.descripcion} onChange={e=>setFormAdic(f=>({...f,descripcion:e.target.value}))} placeholder="Ej: Cambio cañería imprevisto" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="label">Mano de obra</label>
+                            <input className="input" type="number" min="0" value={formAdic.monto_mano_obra} onChange={e=>setFormAdic(f=>({...f,monto_mano_obra:e.target.value}))} placeholder="0" />
+                          </div>
+                          <div>
+                            <label className="label">Materiales</label>
+                            <input className="input" type="number" min="0" value={formAdic.monto_material} onChange={e=>setFormAdic(f=>({...f,monto_material:e.target.value}))} placeholder="0" />
+                          </div>
+                          <div>
+                            <label className="label">Proveedor (opcional)</label>
+                            <select className="input" value={formAdic.proveedor_id} onChange={e=>setFormAdic(f=>({...f,proveedor_id:e.target.value}))}>
+                              <option value="">Sin proveedor</option>
+                              {proveedores.map(p=><option key={p.id} value={p.id}>{p.nombre}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="label">Fecha</label>
+                            <input className="input" type="date" value={formAdic.fecha} onChange={e=>setFormAdic(f=>({...f,fecha:e.target.value}))} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-100" onClick={()=>setFormAdic(f=>({...f,visible:false}))}>Cancelar</button>
+                          <button className="px-3 py-1.5 text-xs bg-[#1a1a2e] text-white rounded-lg hover:bg-[#16213e] disabled:opacity-50" onClick={guardarAdicional} disabled={guardandoForm||!formAdic.descripcion}>{guardandoForm?'Guardando...':'Guardar'}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={()=>setFormAdic(f=>({...f,visible:true}))} className="w-full py-2 text-xs border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-[#1a1a2e] hover:text-[#1a1a2e] transition-colors">
+                        + Agregar adicional
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -569,17 +742,54 @@ export default function FichaClientePage({ params }: { params: { id: string } })
                 {detalleTab==='presupuestos' && (
                   <div className="space-y-2">
                     {detalleData.presupuestos.length===0
-                      ? <p className="text-sm text-gray-400 text-center py-6">Sin presupuestos.</p>
+                      ? <p className="text-sm text-gray-400 text-center py-4">Sin presupuestos.</p>
                       : <table className="w-full text-sm">
                           <thead className="bg-gray-50 text-gray-600 text-xs"><tr><th className="text-left px-3 py-2">Fecha envío</th><th className="text-center px-3 py-2">Estado</th><th className="text-left px-3 py-2">Notas</th><th className="text-right px-3 py-2">Monto</th></tr></thead>
                           <tbody className="divide-y divide-gray-100">
                             {detalleData.presupuestos.map(p=>(
-                              <tr key={p.id}><td className="px-3 py-2 text-gray-500">{p.fecha_envio??'—'}</td><td className="px-3 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${{aceptado:'bg-green-100 text-green-700',rechazado:'bg-red-100 text-red-700',enviado:'bg-blue-100 text-blue-700'}[p.estado]??'bg-gray-100 text-gray-600'}`}>{p.estado.replace(/_/g,' ')}</span></td><td className="px-3 py-2 text-gray-500 max-w-[160px] truncate">{p.notas??'—'}</td><td className="px-3 py-2 text-right font-medium">{fmt(p.monto)}</td></tr>
+                              <tr key={p.id}><td className="px-3 py-2 text-gray-500">{p.fecha_envio??'—'}</td><td className="px-3 py-2 text-center"><span className={`text-xs px-2 py-0.5 rounded-full ${{aceptado:'bg-green-100 text-green-700',rechazado:'bg-red-100 text-red-700',enviado:'bg-blue-100 text-blue-700'}[p.estado]??'bg-gray-100 text-gray-600'}`}>{p.estado.replace(/_/g,' ')}</span></td><td className="px-3 py-2 text-gray-500 max-w-[140px] truncate">{p.notas??'—'}</td><td className="px-3 py-2 text-right font-medium">{fmt(p.monto)}</td></tr>
                             ))}
                           </tbody>
                         </table>
                     }
-                    <Link href="/presupuestos" className="flex items-center justify-center gap-1 py-2 text-xs text-[#1a1a2e] hover:underline">
+                    {/* Form nuevo presupuesto */}
+                    {formPres.visible ? (
+                      <div className="border border-gray-200 rounded-lg p-3 space-y-2 bg-gray-50">
+                        <p className="text-xs font-medium text-gray-600">Nuevo presupuesto</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="label">Monto *</label>
+                            <input className="input" type="number" min="0" value={formPres.monto} onChange={e=>setFormPres(f=>({...f,monto:e.target.value}))} />
+                          </div>
+                          <div>
+                            <label className="label">Estado</label>
+                            <select className="input" value={formPres.estado} onChange={e=>setFormPres(f=>({...f,estado:e.target.value}))}>
+                              <option value="sin_respuesta">Sin respuesta</option>
+                              <option value="enviado">Enviado</option>
+                              <option value="aceptado">Aceptado</option>
+                              <option value="rechazado">Rechazado</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="label">Fecha envío</label>
+                            <input className="input" type="date" value={formPres.fecha_envio} onChange={e=>setFormPres(f=>({...f,fecha_envio:e.target.value}))} />
+                          </div>
+                          <div>
+                            <label className="label">Notas</label>
+                            <input className="input" value={formPres.notas} onChange={e=>setFormPres(f=>({...f,notas:e.target.value}))} placeholder="Opcional" />
+                          </div>
+                        </div>
+                        <div className="flex gap-2 justify-end">
+                          <button className="px-3 py-1.5 text-xs border border-gray-200 rounded-lg hover:bg-gray-100" onClick={()=>setFormPres(f=>({...f,visible:false}))}>Cancelar</button>
+                          <button className="px-3 py-1.5 text-xs bg-[#1a1a2e] text-white rounded-lg hover:bg-[#16213e] disabled:opacity-50" onClick={guardarPresupuesto} disabled={guardandoForm||!formPres.monto}>{guardandoForm?'Guardando...':'Guardar'}</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={()=>setFormPres(f=>({...f,visible:true}))} className="w-full py-2 text-xs border-2 border-dashed border-gray-200 rounded-lg text-gray-400 hover:border-[#1a1a2e] hover:text-[#1a1a2e] transition-colors">
+                        + Agregar presupuesto
+                      </button>
+                    )}
+                    <Link href="/presupuestos" className="flex items-center justify-center gap-1 py-1 text-xs text-[#1a1a2e] hover:underline">
                       Ver todos los presupuestos →
                     </Link>
                   </div>
